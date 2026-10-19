@@ -521,7 +521,7 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
     local -a mpv_extra=()
     (( resume_at > 0 )) && mpv_extra=(--start="$resume_at")
     base=$resume_at; resume_at=0
-    mpv --no-terminal --vo=x11 --force-media-title="$sxe — $title" "${mpv_extra[@]}" "$url" </dev/null >/dev/null 2>&1 &
+    mpv --no-terminal --force-media-title="$sxe — $title" "${mpv_extra[@]}" "$url" </dev/null >/dev/null 2>&1 &
     MPV_PID=$!
 
     RPC_DETAILS=$title

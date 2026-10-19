@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 # pony-tui — MLP:FiM episode browser
-# Usage: ./pony-tui.sh   (needs mpv, plus listeps.sh next to this script or in PATH)
+# Usage: ./pony-tui.sh              open the menu (press [a] there to resume the last episode you watched)
+#        ./pony-tui.sh 4 5          play episode 5 of category 4 (Season 4) directly
+#        ./pony-tui.sh 4            open the episode list of category 4
+#        (needs mpv, plus listeps.sh next to this script or in PATH)
+# The last watched episode is stored in ${XDG_STATE_HOME:-~/.local/state}/pony-tui/last
 #
 # Keys (menus):  ↑/↓ or j/k move · Enter select · / search · 0-9 jump to number
 #                PgUp/PgDn · g/G top/bottom · b/←/Esc back · q quit
-# Keys (player): a/← previous · s/→ next · p toggle autoplay · b/q/Esc back
+#                a resume last episode (main menu) · r cycle resolution 1080p/720p/480p
+# Keys (player): a/← previous · s/→ next · p toggle autoplay · r resolution · b/q/Esc back
 
 BASE_URL="https://static.heartshine.gay/g4-fim"
 QUALITY="${PONY_QUALITY:-1080p}"
+QUAL_CYCLE=(1080p 720p 480p)                  # resolutions toggled with [r]
 QUALITIES=("$QUALITY" 1080p 720p 480p 360p)   # tried in order; first one that exists wins
 CUR_Q="$QUALITY"
 RES_URL=""
 declare -A URL_CACHE
 HAVE_CURL=0; command -v curl >/dev/null 2>&1 && HAVE_CURL=1
 AUTOPLAY=0
+RESUME_LABEL=""   # set by main_menu when there is a last-watched episode ([a] resumes it)
 
 CATEGORIES=(
   "Season 1" "Season 2" "Season 3" "Season 4" "Season 5"
@@ -21,6 +28,48 @@ CATEGORIES=(
   "Movies" "Specials" "Shorts" "Clip shows" "Claymatic Shorts"
 )
 SEASON_COUNT=9   # the first 9 entries are seasons; the rest (Movies, Specials…) use the same s{CAT}e{NUM} URL scheme
+
+# --- command-line arguments: [CATEGORY [EPISODE]] ---------------------------
+usage() {
+  echo "Usage: ${0##*/} [CATEGORY [EPISODE]]" >&2
+  echo "  CATEGORY: 1-${#CATEGORIES[@]} (1-9 = seasons, 10 Movies, 11 Specials, 12 Shorts, 13 Clip shows, 14 Claymatic Shorts)" >&2
+  echo "  Example: ${0##*/} 4 5   -> season 4, episode 5" >&2
+}
+ARG_CAT=""; ARG_EP=""
+if [[ ${1:-} == -h || ${1:-} == --help ]]; then usage; exit 0; fi
+if (( $# > 2 )); then usage; exit 1; fi
+if (( $# >= 1 )); then
+  if [[ ! $1 =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > ${#CATEGORIES[@]} )); then
+    echo "Invalid category: $1" >&2; usage; exit 1
+  fi
+  ARG_CAT=$(( 10#$1 ))
+  if (( $# == 2 )); then
+    if [[ ! $2 =~ ^[0-9]+$ ]] || (( 10#$2 < 1 )); then
+      echo "Invalid episode: $2" >&2; usage; exit 1
+    fi
+    ARG_EP=$(( 10#$2 - 1 ))
+  fi
+fi
+
+# --- last-watched state -----------------------------------------------------
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/pony-tui"
+STATE_FILE="$STATE_DIR/last"
+LAST_CAT=""; LAST_NUM=""; LAST_TITLE=""
+
+save_progress() {  # save_progress CAT NUM TITLE
+  mkdir -p "$STATE_DIR" 2>/dev/null || return 0
+  printf '%s|%s|%s\n' "$1" "$2" "$3" > "$STATE_FILE" 2>/dev/null || true
+}
+
+load_progress() {
+  LAST_CAT=""; LAST_NUM=""; LAST_TITLE=""
+  [[ -f $STATE_FILE ]] || return 0
+  local c n t
+  IFS='|' read -r c n t < "$STATE_FILE" || true
+  if [[ $c =~ ^[0-9]+$ && $n =~ ^[0-9]+$ ]] && (( c >= 1 && c <= ${#CATEGORIES[@]} && n >= 1 )); then
+    LAST_CAT=$c; LAST_NUM=$n; LAST_TITLE=$t
+  fi
+}
 
 # --- sanity checks ----------------------------------------------------------
 if [[ ! -t 0 || ! -t 1 ]]; then
@@ -64,11 +113,10 @@ LOGO_COL=(); for c in 211 216 228 157 117; do LOGO_COL+=("$(fg "$c")"); done
 EQ=(▁ ▂ ▃ ▄ ▅ ▆ ▇ █)
 
 LOGO=(
-' ____    ___   _   _ __   __   _____   _   _   ___ '
-'|  _ \  / _ \ | \ | |\ \ / /  |_   _| | | | | |_ _|'
-'| |_) || | | ||  \| | \ V /     | |   | | | |  | | '
-'|  __/ | |_| || |\  |  | |     | |   | |_| |  | | '
-'|_|     \___/ |_| \_|  |_|     |_|    \___/  |___|'
+'▄▄▄▄   ▄▄▄  ▄▄  ▄▄ ▄▄ ▄▄    ▄▄▄▄▄▄ ▄▄ ▄▄ ▄▄ '
+'██▄█▀ ██▀██ ███▄██ ▀███▀ ▄▄▄  ██   ██ ██ ██ '
+'██    ▀███▀ ██ ▀██   █        ██   ▀███▀ ██ '
+'                                            '
 )
 
 # --- terminal setup / cleanup ----------------------------------------------
@@ -251,13 +299,21 @@ select_menu() {
         status=$note
       else
         status="${GRAY}$(( cnt > 0 ? pos + 1 : 0 ))/${cnt}${RST}"
+        if (( root )) && [[ -n $RESUME_LABEL ]]; then
+          local rl=$RESUME_LABEL maxl=$(( COLS - 14 ))
+          (( maxl < 10 )) && maxl=10
+          (( ${#rl} > maxl )) && rl="${rl:0:maxl-1}…"
+          status+="  ${SUN}a${RST} ${GRAY}→ ${rl}${RST}"
+        fi
       fi
       if (( root )); then
         back_hint="${SKY}q${RST} ${GRAY}quit${RST}"
       else
         back_hint="${SKY}b${RST} ${GRAY}back${RST}  ${SKY}q${RST} ${GRAY}quit${RST}"
       fi
-      hint="${SKY}↑↓${RST} ${GRAY}move${RST}  ${SKY}⏎${RST} ${GRAY}select${RST}  ${SKY}/${RST} ${GRAY}search${RST}  ${SKY}0-9${RST} ${GRAY}jump${RST}  ${back_hint}"
+      local a_hint=""
+      if (( root )) && [[ -n $RESUME_LABEL ]]; then a_hint="${SKY}a${RST} ${GRAY}resume${RST}  "; fi
+      hint="${SKY}↑↓${RST} ${GRAY}move${RST}  ${SKY}⏎${RST} ${GRAY}select${RST}  ${SKY}/${RST} ${GRAY}search${RST}  ${SKY}0-9${RST} ${GRAY}jump${RST}  ${a_hint}${SKY}r${RST} ${GRAY}res:${RST}${SUN}${QUALITY}${RST}  ${back_hint}"
     fi
     out+="${EOL}  ${status}${EOL}  ${hint}"$'\e[K\e[J'
     printf '%s' "$out"
@@ -296,6 +352,8 @@ select_menu() {
         for (( i = 0; i < cnt; i++ )); do
           if (( VIS[i] == target )); then pos=$i; break; fi
         done ;;
+      a|A) if (( root )) && [[ -n $RESUME_LABEL ]]; then MENU_SEL=-1; return 0; fi ;;
+      r|R) cycle_quality; note="${SUN}Resolution: ${QUALITY}${RST}" ;;
       '/') mode=filter; numbuf="" ;;
       ''|l|$'\e[C'|$'\eOC')
         if (( cnt > 0 )); then MENU_SEL=${VIS[pos]}; return 0; fi ;;
@@ -309,10 +367,20 @@ select_menu() {
   done
 }
 
+# --- resolution switching ([r]) ---------------------------------------------
+cycle_quality() {
+  local i next=0
+  for i in "${!QUAL_CYCLE[@]}"; do
+    [[ ${QUAL_CYCLE[i]} == "$QUALITY" ]] && next=$(( (i + 1) % ${#QUAL_CYCLE[@]} ))
+  done
+  QUALITY=${QUAL_CYCLE[next]}
+  QUALITIES=("$QUALITY" 1080p 720p 480p 360p)
+}
+
 # --- URL resolution (some files only exist in lower qualities) ---------------
 # resolve_url CAT NUM -> sets RES_URL and CUR_Q ; returns 1 if no quality exists
 resolve_url() {
-  local key="$1:$2" q u="" code tried=" "
+  local key="$1:$2:$QUALITY" q u="" code tried=" "
   if [[ -n ${URL_CACHE[$key]:-} ]]; then
     RES_URL=${URL_CACHE[$key]%%|*}; CUR_Q=${URL_CACHE[$key]##*|}
     return 0
@@ -385,7 +453,7 @@ draw_player() {  # draw_player SXE TITLE N TOTAL ELAPSED
   bline "$ph" "${PINK}${f}${GRAY}${e}${RST}  ${GRAY}${cnt_txt}${RST}"
 
   out+="  ${BC}╰${dashes}╯${RST}${EOL}${EOL}"
-  out+="  ${SKY}a${GRAY}/${SKY}←${RST} ${GRAY}prev${RST}   ${SKY}s${GRAY}/${SKY}→${RST} ${GRAY}next${RST}   ${SKY}p${RST} ${GRAY}autoplay:${RST} ${ap}   ${SKY}b${RST} ${GRAY}back${RST}${EOL}"
+  out+="  ${SKY}a${GRAY}/${SKY}←${RST} ${GRAY}prev${RST}   ${SKY}s${GRAY}/${SKY}→${RST} ${GRAY}next${RST}   ${SKY}p${RST} ${GRAY}autoplay:${RST} ${ap}   ${SKY}r${RST} ${GRAY}res:${RST} ${SUN}${QUALITY}${RST}   ${SKY}b${RST} ${GRAY}back${RST}${EOL}"
   if (( SECONDS < PLAY_NOTE_UNTIL )); then
     out+="${EOL}  ${PLAY_NOTE}${EOL}"
   fi
@@ -396,7 +464,7 @@ draw_player() {  # draw_player SXE TITLE N TOTAL ELAPSED
 play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
   local cat_num=$1 ep_index=$2; shift 2
   local -a eps=("$@")
-  local total=${#eps[@]}
+  local total=${#eps[@]} resume_at=0 base=0
 
   while true; do
     PLAY_LAST=$ep_index
@@ -415,14 +483,18 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
       return
     fi
     url=$RES_URL
+    save_progress "$cat_num" "$num" "$title"
 
-    mpv --no-terminal --no-hwdec --force-media-title="$sxe — $title" "$url" </dev/null >/dev/null 2>&1 &
+    local -a mpv_extra=()
+    (( resume_at > 0 )) && mpv_extra=(--start="$resume_at")
+    base=$resume_at; resume_at=0
+    mpv --no-terminal --vo=x11 --force-media-title="$sxe — $title" "${mpv_extra[@]}" "$url" </dev/null >/dev/null 2>&1 &
     MPV_PID=$!
 
     local start=$SECONDS action="" rc=0
     PLAY_NOTE=""; PLAY_NOTE_UNTIL=0
     while kill -0 "$MPV_PID" 2>/dev/null; do
-      draw_player "$sxe" "$title" "$num" "$total" $(( SECONDS - start ))
+      draw_player "$sxe" "$title" "$num" "$total" $(( base + SECONDS - start ))
       if read_key 0.25; then
         case $KEY in
           a|A|$'\e[D'|$'\eOD')
@@ -432,6 +504,7 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
             if (( ep_index < total - 1 )); then action=next; break; fi
             set_note "You're already at the last episode of this category." ;;
           p|P) AUTOPLAY=$(( 1 - AUTOPLAY )) ;;
+          r|R) cycle_quality; resume_at=$(( base + SECONDS - start )); action=requal; break ;;
           b|B|q|Q|$'\e') action=back; break ;;
         esac
       fi
@@ -447,6 +520,7 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
     case $action in
       prev) ep_index=$(( ep_index - 1 )); continue ;;
       next) ep_index=$(( ep_index + 1 )); continue ;;
+      requal) continue ;;
       back) return ;;
     esac
 
@@ -466,8 +540,8 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
 }
 
 # --- episodes menu ----------------------------------------------------------
-episodes_menu() {
-  local cat_num=$1 name="${CATEGORIES[$1-1]}"
+episodes_menu() {  # episodes_menu CAT [START_INDEX]  (START_INDEX given -> play it right away)
+  local cat_num=$1 start=${2:-} name="${CATEGORIES[$1-1]}"
   local -a eps
   show_message "${SKY}Loading ${name}…${RST}"
   mapfile -t eps < <("${LISTEPS[@]}" "$cat_num" 2>/dev/null | sed 's/\r$//' | grep -v '^[[:space:]]*$')
@@ -479,6 +553,15 @@ episodes_menu() {
   fi
 
   local sel=0 note=""
+  if [[ -n $start ]]; then
+    if (( start >= ${#eps[@]} )); then
+      show_message "${RED}✖ ${name} only has ${#eps[@]} episodes (you asked for #$(( start + 1 ))).${RST}"
+      wait_key
+      return
+    fi
+    play_episode "$cat_num" "$start" "${eps[@]}"
+    sel=$PLAY_LAST
+  fi
   while true; do
     MENU_ITEMS=("${eps[@]}")
     select_menu "$name" "$sel" "$note" 0 || return
@@ -490,8 +573,23 @@ episodes_menu() {
 
 # --- main menu --------------------------------------------------------------
 main_menu() {
-  local sel=0 i
+  local sel=0 i sxe rc
+  if [[ -n $ARG_CAT ]]; then
+    episodes_menu "$ARG_CAT" "$ARG_EP"
+    sel=$(( ARG_CAT - 1 ))
+  fi
   while true; do
+    load_progress
+    RESUME_LABEL=""
+    if [[ -n $LAST_CAT ]]; then
+      if (( LAST_CAT <= SEASON_COUNT )); then
+        printf -v sxe 'S%02dE%02d' "$LAST_CAT" "$LAST_NUM"
+      else
+        sxe="${CATEGORIES[LAST_CAT-1]} #${LAST_NUM}"
+      fi
+      RESUME_LABEL=$sxe
+      [[ -n $LAST_TITLE ]] && RESUME_LABEL+=" — ${LAST_TITLE}"
+    fi
     MENU_ITEMS=()
     for i in "${!CATEGORIES[@]}"; do
       if (( i < SEASON_COUNT )); then
@@ -501,8 +599,14 @@ main_menu() {
       fi
     done
     select_menu "Pick a category" "$sel" "" 1 || exit 0
-    sel=$MENU_SEL
-    episodes_menu $(( sel + 1 ))
+    if (( MENU_SEL < 0 )); then           # [a] -> resume last watched episode
+      rc=$LAST_CAT
+      sel=$(( rc - 1 ))
+      episodes_menu "$rc" $(( LAST_NUM - 1 ))
+    else
+      sel=$MENU_SEL
+      episodes_menu $(( sel + 1 ))
+    fi
   done
 }
 

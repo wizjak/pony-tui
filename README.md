@@ -1,5 +1,8 @@
 # pony-tui
 
+<img width="853" height="489" alt="image" src="https://github.com/user-attachments/assets/7b22856a-34ea-45b3-b53d-05e13940251d" />
+
+
 A lightweight CLI/TUI episode browser and player for **My Little Pony: Friendship is Magic**, heavily inspired by [`ani-cli`](https://github.com/pystardust/ani-cli).
 
 Powered by content from [fim.heartshine.gay](https://fim.heartshine.gay/) and rendered locally using `mpv`.

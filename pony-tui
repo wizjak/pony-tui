@@ -1,2 +1,2 @@
-cd /$HOME/.config/pony-tui/
-bash pony-tui.sh
+cd "$HOME/.config/pony-tui/"
+bash pony-tui.sh "$@"

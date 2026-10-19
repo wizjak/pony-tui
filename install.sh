@@ -209,7 +209,7 @@ step_perms() {
     echo "The repository is missing listeps.sh or pony-tui.sh."
     return 1
   fi
-  chmod +x listeps.sh pony-tui.sh
+  chmod +x listeps.sh pony-tui.sh pony-rpc
   [[ -f pony-tui ]] && chmod +x pony-tui
   return 0
 }

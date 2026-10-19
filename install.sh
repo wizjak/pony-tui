@@ -7,4 +7,4 @@ chmod +x pony-tui.sh
 chmod +x pony-tui
 sudo mv pony-tui /usr/local/bin
 sudo chmod +x /usr/local/bin/pony-tui
-done.
+echo done.

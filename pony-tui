@@ -1,2 +1,2 @@
-cd /$HOME/.local/share/pony-tui
+cd /$HOME/.config/pony-tui/
 bash pony-tui.sh

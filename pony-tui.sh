@@ -9,7 +9,8 @@
 # Keys (menus):  ↑/↓ or j/k move · Enter select · / search · 0-9 jump to number
 #                PgUp/PgDn · g/G top/bottom · b/←/Esc back · q quit
 #                a resume last episode (main menu) · r cycle resolution 1080p/720p/480p
-# Keys (player): a/← previous · s/→ next · p toggle autoplay · r resolution · b/q/Esc back
+# Keys (player): a/← previous · s/→ next · p toggle autoplay · r resolution · d toggle Discord presence · b/q/Esc back
+# Discord Rich Presence is optional: put the pony-rpc binary next to this script (PONY_RPC=0 disables it).
 
 BASE_URL="https://static.heartshine.gay/g4-fim"
 QUALITY="${PONY_QUALITY:-1080p}"
@@ -82,7 +83,7 @@ if ! command -v mpv >/dev/null 2>&1; then
 fi
 
 # --- locate listeps.sh ------------------------------------------------------
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 if [[ -f "$DIR/listeps.sh" ]]; then
   LISTEPS=(bash "$DIR/listeps.sh")
 elif command -v listeps.sh >/dev/null 2>&1; then
@@ -91,6 +92,33 @@ else
   echo "Can't find listeps.sh (neither next to this script nor in your PATH)." >&2
   exit 1
 fi
+
+# --- Discord Rich Presence (optional) ---------------------------------------
+# Uses the pony-rpc binary if it sits next to this script (or is in your PATH).
+# Disable with PONY_RPC=0, or toggle it with [d] while playing.
+RPC=()
+if [[ -x "$DIR/pony-rpc" ]]; then
+  RPC=("$DIR/pony-rpc")
+elif command -v pony-rpc >/dev/null 2>&1; then
+  RPC=(pony-rpc)
+fi
+RPC_ON=1; [[ ${PONY_RPC:-1} == 0 ]] && RPC_ON=0
+RPC_PID=""; RPC_DETAILS=""; RPC_STATE=""; RPC_START=0
+
+rpc_stop() {
+  [[ -n $RPC_PID ]] || return 0
+  kill "$RPC_PID" 2>/dev/null
+  wait "$RPC_PID" 2>/dev/null
+  RPC_PID=""
+}
+
+rpc_start() {  # (re)starts the presence for RPC_DETAILS / RPC_STATE
+  rpc_stop
+  (( ${#RPC[@]} && RPC_ON )) || return 0
+  "${RPC[@]}" -q -parent $$ -start "$RPC_START" \
+    -details "$RPC_DETAILS" -state "$RPC_STATE" </dev/null >/dev/null 2>&1 &
+  RPC_PID=$!
+}
 
 # --- colors (256-color pastel palette; honors NO_COLOR) ---------------------
 if [[ -z ${NO_COLOR:-} && ${TERM:-dumb} != dumb ]]; then
@@ -123,6 +151,7 @@ LOGO=(
 MPV_PID=""
 cleanup() {
   [[ -n $MPV_PID ]] && kill "$MPV_PID" 2>/dev/null
+  [[ -n $RPC_PID ]] && kill "$RPC_PID" 2>/dev/null
   printf '\e[?25h'
   tput rmcup 2>/dev/null
 }
@@ -454,6 +483,10 @@ draw_player() {  # draw_player SXE TITLE N TOTAL ELAPSED
 
   out+="  ${BC}╰${dashes}╯${RST}${EOL}${EOL}"
   out+="  ${SKY}a${GRAY}/${SKY}←${RST} ${GRAY}prev${RST}   ${SKY}s${GRAY}/${SKY}→${RST} ${GRAY}next${RST}   ${SKY}p${RST} ${GRAY}autoplay:${RST} ${ap}   ${SKY}r${RST} ${GRAY}res:${RST} ${SUN}${QUALITY}${RST}   ${SKY}b${RST} ${GRAY}back${RST}${EOL}"
+  if (( ${#RPC[@]} )); then
+    local dc; if (( RPC_ON )); then dc="${MINT}on${RST}"; else dc="${GRAY}off${RST}"; fi
+    out+="  ${SKY}d${RST} ${GRAY}discord presence:${RST} ${dc}${EOL}"
+  fi
   if (( SECONDS < PLAY_NOTE_UNTIL )); then
     out+="${EOL}  ${PLAY_NOTE}${EOL}"
   fi
@@ -491,6 +524,15 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
     mpv --no-terminal --vo=x11 --force-media-title="$sxe — $title" "${mpv_extra[@]}" "$url" </dev/null >/dev/null 2>&1 &
     MPV_PID=$!
 
+    RPC_DETAILS=$title
+    if (( cat_num <= SEASON_COUNT )); then
+      RPC_STATE="${CATEGORIES[cat_num-1]} · Episode ${num}"
+    else
+      RPC_STATE="${CATEGORIES[cat_num-1]} · #${num}"
+    fi
+    RPC_START=$(( $(date +%s) - base ))   # base = position we resumed from (after [r])
+    rpc_start
+
     local start=$SECONDS action="" rc=0
     PLAY_NOTE=""; PLAY_NOTE_UNTIL=0
     while kill -0 "$MPV_PID" 2>/dev/null; do
@@ -504,6 +546,7 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
             if (( ep_index < total - 1 )); then action=next; break; fi
             set_note "You're already at the last episode of this category." ;;
           p|P) AUTOPLAY=$(( 1 - AUTOPLAY )) ;;
+          d|D) if (( ${#RPC[@]} )); then RPC_ON=$(( 1 - RPC_ON )); rpc_start; fi ;;
           r|R) cycle_quality; resume_at=$(( base + SECONDS - start )); action=requal; break ;;
           b|B|q|Q|$'\e') action=back; break ;;
         esac
@@ -516,6 +559,7 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
       wait "$MPV_PID" 2>/dev/null; rc=$?
     fi
     MPV_PID=""
+    rpc_stop
 
     case $action in
       prev) ep_index=$(( ep_index - 1 )); continue ;;

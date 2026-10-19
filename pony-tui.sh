@@ -416,7 +416,7 @@ play_episode() {  # play_episode CAT_NUM EP_INDEX EPISODES...
     fi
     url=$RES_URL
 
-    mpv --no-terminal --force-media-title="$sxe — $title" "$url" </dev/null >/dev/null 2>&1 &
+    mpv --no-terminal --no-hwdec --force-media-title="$sxe — $title" "$url" </dev/null >/dev/null 2>&1 &
     MPV_PID=$!
 
     local start=$SECONDS action="" rc=0

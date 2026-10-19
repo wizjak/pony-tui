@@ -1,0 +1,2 @@
+cd /$HOME/.local/share/pony-tui
+bash pony-tui.sh

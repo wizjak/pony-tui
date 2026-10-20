@@ -100,14 +100,14 @@ pony-tui
 *Example (unattended install):*
 
 ```bash
-curl -fsSL [https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh](https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh) | bash -s -- --yes
+curl -fsSl https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh | bash
 
 ```
 
 > **Updating:** Simply re-run the installer.
 > **Manual Installation (No `sudo` required):**
 > ```bash
-> git clone [https://github.com/wizjak/pony-tui](https://github.com/wizjak/pony-tui)
+> git clone https://github.com/wizjak/pony-tui
 > cd pony-tui
 > ./pony-tui.sh
 > 
@@ -183,7 +183,7 @@ Rich Presence support is optional and handled by `pony-rpc`, a lightweight helpe
 If you need to build it manually from source (requires [Go](https://go.dev/)):
 
 ```bash
-git clone [https://github.com/wizjak/pony-rpc-source](https://github.com/wizjak/pony-rpc-source)
+git clone https://github.com/wizjak/pony-tui
 cd pony-rpc-source
 go build -o pony-rpc .
 

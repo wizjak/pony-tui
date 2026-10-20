@@ -1,66 +1,73 @@
 # pony-tui
 
-A lightweight CLI/TUI episode browser and player for **My Little Pony: Friendship is Magic**, heavily inspired by [`ani-cli`](https://github.com/pystardust/ani-cli).
+A lightweight, [`ani-cli`](https://github.com/pystardust/ani-cli)-style terminal player for **My Little Pony: Friendship is Magic**, powered by [fim.heartshine.gay](https://fim.heartshine.gay/).
 
-Powered by content from [fim.heartshine.gay](https://www.google.com/search?q=https://fim.heartshine.gay/) and rendered locally using `mpv`.
-
----
-
-## 🚀 What's New in the Latest Version
-
-* **Direct CLI Arguments:** Launch specific categories or individual episodes directly from your terminal (`pony-tui [category] [episode]`).
-* **Resume History:** Remembers the last watched episode and allows you to resume it instantly from the main menu using the `[a]` key. Progress is securely stored following XDG standards (`$XDG_STATE_HOME`).
-* **Dynamic Resolution Cycling:** Cycle and toggle video quality on-the-fly (`1080p` / `720p` / `480p`) both inside menus and directly while playing using the `[r]` key.
-* **Smart URL Validation:** Automatically falls back to available lower qualities if a specific resolution doesn't exist on the server.
+Browse every season, movie, and special directly from your terminal and play them seamlessly using `mpv`. Written in pure Bash.
 
 ---
 
-## 📦 Features
+## 🚀 Key Features
 
-* **Full Catalog:** Seasons 1–9, movies, specials, shorts, and extra content.
-* **Interactive TUI:** Built-in fast search, Vim-like keybindings (`j`/`k`, `g`/`G`), page jumps, and numbered navigation.
-* **Seamless Playback:** Powered by `mpv` with autoplay toggle, quick episode skipping (`a`/`s` or arrow keys), and state preservation.
-* **Customizable UI:** Pastel terminal palette with built-in `NO_COLOR` support.
-* **Fast & Lightweight:** Written in pure Bash with minimal system dependencies.
+* **Full Catalog:** Seasons 1–9, movies, specials, shorts, clip shows, and claymation shorts.
+* **Interactive TUI Navigation:** Navigate using arrow keys or Vim shortcuts (`j`/`k`, `g`/`G`), perform live searches (`/`), jump directly by item number, or page scroll (`PgUp`/`PgDn`).
+* **Resume Playback:** Remembers your last watched episode and allows quick resumption with a single key (`a`).
+* **Dynamic Resolution & Fallback:** Cycle through video qualities (`1080p`, `720p`, `480p`, `360p`) on the fly. Automatically falls back to the next best quality if a stream is unavailable.
+* **Integrated Player Controls:** Quick skipping to previous/next episodes (`a`/`s` or arrow keys), autoplay toggles, and live resolution switching during playback.
+* **Discord Rich Presence:** Optional Go integration (`pony-rpc`) showing your currently watched episode on Discord.
+* **Pastel UI:** Adaptive terminal palette with full respect for `NO_COLOR` standards.
 
 ---
 
 ## 💻 Usage & CLI Arguments
 
-You can pass arguments directly to open categories or episodes without navigating the menus:
+You can start `pony-tui` interactively or pass arguments directly to jump to a specific category or episode:
 
 ```bash
-# Open the interactive main menu
+# Open the main menu
 pony-tui
 
-# Open a specific category (e.g., Season 4 -> category 4)
+# Open the episode list of Category 4 (Season 4)
 pony-tui 4
 
-# Play a specific episode directly (e.g., Season 4, Episode 5)
+# Direct playback: Category 4, Episode 5
 pony-tui 4 5
+
+# Display help menu
+pony-tui --help
 
 ```
 
 > **Category Mapping Reference:**
-> `1-9`: Seasons 1 to 9 | `10`: Movies | `11`: Specials | `12`: Shorts | `13`: Clip shows | `14`: Claymatic Shorts
+> `1`–`9`: Seasons 1 to 9 | `10`: Movies | `11`: Specials | `12`: Shorts | `13`: Clip Shows | `14`: Claymatic Shorts
 
 ---
 
 ## 📦 Dependencies
 
-`pony-tui` requires **`bash`**, **`jq`** (via listeps), **`curl`**, and **`mpv`**.
+| Dependency | Purpose |
+| --- | --- |
+| `bash` (4.0+) | Running `pony-tui` |
+| `mpv` | Video playback |
+| `jq` | Parsing the JSON catalog |
+| `curl` | Downloading catalog data and checking resolution availability |
+| `git` | Required for installation via script |
 
-### Arch Linux / Manjaro
+*An interactive terminal with 256-color support is required. Built for Linux (macOS users need a updated `bash` version via Homebrew).*
+
+### Install via Package Manager
 
 ```bash
-sudo pacman -Syu jq curl mpv
+# Arch Linux / Manjaro
+sudo pacman -S --needed git mpv jq curl
 
-```
+# Debian / Ubuntu / Linux Mint
+sudo apt install git mpv jq curl
 
-### Debian / Ubuntu / Linux Mint
+# Fedora
+sudo dnf install git mpv jq curl
 
-```bash
-sudo apt update && sudo apt install jq curl mpv
+# openSUSE
+sudo zypper install git mpv jq curl
 
 ```
 
@@ -68,79 +75,135 @@ sudo apt update && sudo apt install jq curl mpv
 
 ## 📥 Installation
 
-You can install `pony-tui` instantly using the installation script:
+Install automatically using the installation script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh | bash
+curl -fsSL [https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh](https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh) | bash
 
 ```
 
-Once installed, simply launch it from any terminal session:
+Once installed, launch it from any terminal:
 
 ```bash
 pony-tui
 
 ```
 
+### Script Options
+
+| Option | Description |
+| --- | --- |
+| `-y`, `--yes` | Skip interactive prompts (assume "yes") |
+| `--uninstall` | Uninstall `pony-tui` completely |
+| `-h`, `--help` | Show usage options |
+
+*Example (unattended install):*
+
+```bash
+curl -fsSL [https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh](https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh) | bash -s -- --yes
+
+```
+
+> **Updating:** Simply re-run the installer.
+> **Manual Installation (No `sudo` required):**
+> ```bash
+> git clone [https://github.com/wizjak/pony-tui](https://github.com/wizjak/pony-tui)
+> cd pony-tui
+> ./pony-tui.sh
+> 
+> ```
+> 
+> 
+> *(Note: `listeps.sh` must remain in the same folder as `pony-tui.sh`)*
+
 ---
 
 ## 🎮 Navigation & Keybindings
 
-### Main Menu & Category Menus
+### Navigation Menus
 
 | Key | Action |
 | --- | --- |
-| `↑` / `↓` or `j` / `k` | Move selection up / down |
+| `↑` / `↓` or `k` / `j` | Move selection up / down |
 | `PgUp` / `PgDn` | Scroll page up / down |
 | `g` / `G` | Jump to top / bottom |
-| `Enter` / `l` / `→` | Select category or episode |
-| `/` | Live search / filter items |
-| `0–9` | Direct jump to item number |
+| `0`–`9` | Type item number to jump |
+| `Enter` / `l` / `→` | Select category / episode |
+| `/` | Live search / filter items (`Esc` to clear) |
 | `a` | **(Main Menu)** Resume last watched episode |
-| `r` | Cycle video resolution (`1080p` / `720p` / `480p`) |
-| `b` / `h` / `Esc` | Go back |
+| `r` | Cycle resolution (`1080p` → `720p` → `480p`) |
+| `b` / `h` / `←` / `Esc` | Go back |
 | `q` | Quit |
 
 ### Player Controls
 
+When an episode starts, `mpv` opens in its own window while `pony-tui` displays a control panel in the terminal:
+
 | Key | Action |
 | --- | --- |
-| `a` / `←` | Play previous episode |
-| `s` / `→` | Play next episode |
+| `a` / `←` | Previous episode |
+| `s` / `→` | Next episode |
 | `p` | Toggle autoplay |
-| `r` | Cycle/switch resolution on-the-fly and resume playback |
+| `r` | Switch resolution on-the-fly and resume playback position |
+| `d` | Toggle Discord Rich Presence |
 | `b` / `q` / `Esc` | Stop playback and return to menu |
 
 ---
 
-## ⚙️ Environment Variables
+## ⚙️ Environment Variables & Configuration
 
-You can customize `pony-tui` behavior by setting environment variables in your shell configuration (`~/.bashrc`, `~/.zshrc`, etc.):
+Set these variables in your shell configuration (`~/.bashrc`, `~/.zshrc`, etc.) to customize behavior:
 
-* **Video Quality:** Set preferred default video resolution (default: `1080p`).
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PONY_QUALITY` | `1080p` | Preferred default resolution (`1080p`, `720p`, `480p`, `360p`) |
+| `PONY_RPC` | `1` | Set to `0` to disable Discord Rich Presence |
+| `NO_COLOR` | *unset* | Set to any value to disable colored ANSI output |
+| `XDG_STATE_HOME` | `~/.local/state` | Base folder for saved state and progress |
+
 ```bash
 export PONY_QUALITY="720p"
 
 ```
 
+### Application Files
 
-* **Disable Colors:** Force plain terminal output without ANSI colors.
+| Path | Description |
+| --- | --- |
+| `~/.config/pony-tui/` | Application directory |
+| `~/.config/pony-tui/db.json` | Local episode catalog (delete to force refresh) |
+| `${XDG_STATE_HOME:-~/.local/state}/pony-tui/last` | Stores playback state for episode resuming |
+
+---
+
+## 🎮 Discord Rich Presence
+
+Rich Presence support is optional and handled by `pony-rpc`, a lightweight helper written in Go. A prebuilt binary is included with standard installations.
+
+If you need to build it manually from source (requires [Go](https://go.dev/)):
+
 ```bash
-export NO_COLOR=1
+git clone [https://github.com/wizjak/pony-rpc-source](https://github.com/wizjak/pony-rpc-source)
+cd pony-rpc-source
+go build -o pony-rpc .
 
 ```
 
-
+Place the compiled `pony-rpc` binary alongside `pony-tui.sh` (or in your `PATH`).
 
 ---
 
 ## 💖 Acknowledgments
 
-* **[fim.heartshine.gay](https://www.google.com/search?q=https://fim.heartshine.gay/)** for providing the episode database and media hosting.
-* **[ani-cli](https://github.com/pystardust/ani-cli)** for inspiring the interactive TUI flow.
+* **[heartshine](https://www.google.com/url?sa=E&source=gmail&q=https://fim.heartshine.gay/)** for hosting the media catalog and video files.
+* **[ani-cli](https://github.com/pystardust/ani-cli)** for inspiring the interactive TUI design and workflow.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is open-source and released under the [MIT License](https://www.google.com/search?q=LICENSE).
+
+```
+
+```

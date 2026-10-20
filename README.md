@@ -78,7 +78,7 @@ sudo zypper install git mpv jq curl
 Install automatically using the installation script:
 
 ```bash
-curl -fsSL [https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh](https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh) | bash
+curl -fsSl https://raw.githubusercontent.com/wizjak/pony-tui/refs/heads/main/install.sh | bash
 
 ```
 
